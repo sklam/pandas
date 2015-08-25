@@ -1478,6 +1478,14 @@ class TestMathPythonPython(tm.TestCase):
             expect = getattr(np, fn)(a.data, b.data)
             np.testing.assert_allclose(got, expect)
 
+    def test_df_use_case(self):
+        df = DataFrame({'a': np.random.randn(10),
+                        'b': np.random.randn(10)})
+        df.eval("e = arctan2(sin(a), b)")
+        got = df.e
+        expect = np.arctan2(np.sin(df.a.data), df.b.data)
+        pd.util.testing.assert_almost_equal(got, expect)
+
 
 class TestMathPythonPandas(TestMathPythonPython):
     @classmethod

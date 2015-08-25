@@ -1446,6 +1446,7 @@ class TestMathPythonPython(tm.TestCase):
         cls.engine = 'python'
         cls.parser = 'pandas'
         cls.unary_fns = _unary_math_ops
+        cls.binary_fns = _binary_math_ops
 
     @classmethod
     def tearDownClass(cls):
@@ -1465,6 +1466,18 @@ class TestMathPythonPython(tm.TestCase):
             got = self.eval(expr)
             expect = getattr(np, fn)(a.data)
             pd.util.testing.assert_almost_equal(got, expect)
+
+    def test_binary_functions(self):
+        df = DataFrame({'a': np.random.randn(10),
+                        'b': np.random.randn(10)})
+        a = df.a
+        b = df.b
+        for fn in self.binary_fns:
+            expr = "{0}(a, b)".format(fn)
+            got = self.eval(expr)
+            expect = getattr(np, fn)(a.data, b.data)
+            np.testing.assert_allclose(got, expect)
+
 
 class TestMathPythonPandas(TestMathPythonPython):
     @classmethod

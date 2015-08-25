@@ -23,7 +23,8 @@ from pandas.computation.engines import _engines, NumExprClobberingError
 from pandas.computation.expr import PythonExprVisitor, PandasExprVisitor
 from pandas.computation.ops import (_binary_ops_dict,
                                     _special_case_arith_ops_syms,
-                                    _arith_ops_syms, _bool_ops_syms)
+                                    _arith_ops_syms, _bool_ops_syms,
+                                    _unary_math_ops, _binary_math_ops)
 
 import pandas.computation.expr as expr
 import pandas.util.testing as tm
@@ -1439,13 +1440,12 @@ class TestOperationsPythonPandas(TestOperationsNumExprPandas):
         cls.arith_ops = expr._arith_ops_syms + expr._cmp_ops_syms
 
 
-class TestMathPythonPandas(tm.TestCase):
-
+class TestMathPythonPython(tm.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.engine = 'python'
         cls.parser = 'pandas'
-        cls.unary_fns = ["sqrt"]
+        cls.unary_fns = _unary_math_ops
 
     @classmethod
     def tearDownClass(cls):
@@ -1458,10 +1458,36 @@ class TestMathPythonPandas(tm.TestCase):
         return pd.eval(*args, **kwargs)
 
     def test_unary_functions(self):
-        a = 1
+        df = DataFrame({'a': np.random.randn(10)})
+        a = df.a
         for fn in self.unary_fns:
-            self.eval("{0}(a)".format(fn))
+            expr = "{0}(a)".format(fn)
+            got = self.eval(expr)
+            expect = getattr(np, fn)(a.data)
+            pd.util.testing.assert_almost_equal(got, expect)
 
+class TestMathPythonPandas(TestMathPythonPython):
+    @classmethod
+    def setUpClass(cls):
+        super(TestMathPythonPandas, cls).setUpClass()
+        cls.engine = 'python'
+        cls.parser = 'pandas'
+
+
+class TestMathNumExprPandas(TestMathPythonPython):
+    @classmethod
+    def setUpClass(cls):
+        super(TestMathNumExprPandas, cls).setUpClass()
+        cls.engine = 'numexpr'
+        cls.parser = 'pandas'
+
+
+class TestMathNumExprPython(TestMathPythonPython):
+    @classmethod
+    def setUpClass(cls):
+        super(TestMathNumExprPython, cls).setUpClass()
+        cls.engine = 'numexpr'
+        cls.parser = 'python'
 
 
 _var_s = randn(10)

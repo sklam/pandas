@@ -1439,6 +1439,31 @@ class TestOperationsPythonPandas(TestOperationsNumExprPandas):
         cls.arith_ops = expr._arith_ops_syms + expr._cmp_ops_syms
 
 
+class TestMathPythonPandas(tm.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.engine = 'python'
+        cls.parser = 'pandas'
+        cls.unary_fns = ["sqrt"]
+
+    @classmethod
+    def tearDownClass(cls):
+        del cls.engine, cls.parser
+
+    def eval(self, *args, **kwargs):
+        kwargs['engine'] = self.engine
+        kwargs['parser'] = self.parser
+        kwargs['level'] = kwargs.pop('level', 0) + 1
+        return pd.eval(*args, **kwargs)
+
+    def test_unary_functions(self):
+        a = 1
+        for fn in self.unary_fns:
+            self.eval("{0}(a)".format(fn))
+
+
+
 _var_s = randn(10)
 
 

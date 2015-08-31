@@ -1481,7 +1481,9 @@ class TestMathPythonPython(tm.TestCase):
     def test_df_use_case(self):
         df = DataFrame({'a': np.random.randn(10),
                         'b': np.random.randn(10)})
-        df.eval("e = arctan2(sin(a), b)")
+        df.eval("e = arctan2(sin(a), b)",
+                engine=self.engine,
+                parser=self.parser)
         got = df.e
         expect = np.arctan2(np.sin(df.a), df.b)
         pd.util.testing.assert_almost_equal(got, expect)
@@ -1489,7 +1491,9 @@ class TestMathPythonPython(tm.TestCase):
     def test_df_arithmetic_subexpression(self):
         df = DataFrame({'a': np.random.randn(10),
                         'b': np.random.randn(10)})
-        df.eval("e = sin(a + b)")
+        df.eval("e = sin(a + b)",
+                engine=self.engine,
+                parser=self.parser)
         got = df.e
         expect = np.sin(df.a + df.b)
         pd.util.testing.assert_almost_equal(got, expect)
@@ -1497,7 +1501,9 @@ class TestMathPythonPython(tm.TestCase):
     def check_result_type(self, dtype, expect_dtype):
         df = DataFrame({'a': np.random.randn(10).astype(dtype)})
         self.assertEqual(df.a.dtype, dtype)
-        df.eval("b = sin(a)")
+        df.eval("b = sin(a)",
+                engine=self.engine,
+                parser=self.parser)
         got = df.b
         expect = np.sin(df.a)
         self.assertEqual(expect.dtype, got.dtype)
@@ -1510,9 +1516,15 @@ class TestMathPythonPython(tm.TestCase):
         self.check_result_type(np.float32, np.float32)
         self.check_result_type(np.float64, np.float64)
         # Did not test complex64 because DataFrame is converting it to
-        # complex128
+        # complex128. Due to https://github.com/pydata/pandas/issues/10952
         self.check_result_type(np.complex128, np.complex128)
 
+    def test_undefined_func(self):
+        df = DataFrame({'a': np.random.randn(10)})
+        with tm.assertRaises(ValueError):
+            df.eval("mysin(a)",
+                    engine=self.engine,
+                    parser=self.parser)
 
 class TestMathPythonPandas(TestMathPythonPython):
     @classmethod

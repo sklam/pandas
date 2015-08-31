@@ -501,6 +501,11 @@ class NDFrame(PandasObject):
         """
         result = self[item]
         del self[item]
+        try:
+            result._reset_cacher()
+        except AttributeError:
+            pass
+
         return result
 
     def squeeze(self):
@@ -1094,6 +1099,11 @@ class NDFrame(PandasObject):
             a weakref to cacher """
         self._cacher = (item, weakref.ref(cacher))
 
+    def _reset_cacher(self):
+        """ reset the cacher """
+        if hasattr(self,'_cacher'):
+            del self._cacher
+
     def _iget_item_cache(self, item):
         """ return the cached item, item represents a positional indexer """
         ax = self._info_axis
@@ -1330,6 +1340,7 @@ class NDFrame(PandasObject):
             # exception:
             self._data.delete(key)
 
+        # delete from the caches
         try:
             del self._item_cache[key]
         except KeyError:
@@ -2981,9 +2992,9 @@ class NDFrame(PandasObject):
             * 'krogh', 'piecewise_polynomial', 'spline', and 'pchip' are all
               wrappers around the scipy interpolation methods of similar
               names. These use the actual numerical values of the index. See
-              the scipy documentation for more on their behavior:
-              http://docs.scipy.org/doc/scipy/reference/interpolate.html#univariate-interpolation
-              http://docs.scipy.org/doc/scipy/reference/tutorial/interpolate.html
+              the scipy documentation for more on their behavior
+              `here <http://docs.scipy.org/doc/scipy/reference/interpolate.html#univariate-interpolation>`__
+              `and here <http://docs.scipy.org/doc/scipy/reference/tutorial/interpolate.html>`__
 
         axis : {0, 1}, default 0
             * 0: fill column-by-column
@@ -3433,8 +3444,7 @@ class NDFrame(PandasObject):
         start = self.index.searchsorted(start_date, side='right')
         return self.ix[start:]
 
-    def align(self, other, join='outer', axis=None, level=None, copy=True,
-              fill_value=None, method=None, limit=None, fill_axis=0):
+    _shared_docs['align'] = (
         """
         Align two object on their axes with the
         specified join method for each axis Index
@@ -3456,16 +3466,45 @@ class NDFrame(PandasObject):
             "compatible" value
         method : str, default None
         limit : int, default None
-        fill_axis : {0, 1}, default 0
+        fill_axis : %(axes_single_arg)s, default 0
             Filling axis, method and limit
+        broadcast_axis : %(axes_single_arg)s, default None
+            Broadcast values along this axis, if aligning two objects of
+            different dimensions
+
+            .. versionadded:: 0.17.0
 
         Returns
         -------
-        (left, right) : (type of input, type of other)
+        (left, right) : (%(klass)s, type of other)
             Aligned objects
         """
+    )
+
+    @Appender(_shared_docs['align'] % _shared_doc_kwargs)
+    def align(self, other, join='outer', axis=None, level=None, copy=True,
+              fill_value=None, method=None, limit=None, fill_axis=0,
+              broadcast_axis=None):
         from pandas import DataFrame, Series
         method = com._clean_fill_method(method)
+
+        if broadcast_axis == 1 and self.ndim != other.ndim:
+            if isinstance(self, Series):
+                # this means other is a DataFrame, and we need to broadcast self
+                df = DataFrame(dict((c, self) for c in other.columns),
+                               **other._construct_axes_dict())
+                return df._align_frame(other, join=join, axis=axis, level=level,
+                                       copy=copy, fill_value=fill_value,
+                                       method=method, limit=limit,
+                                       fill_axis=fill_axis)
+            elif isinstance(other, Series):
+                # this means self is a DataFrame, and we need to broadcast other
+                df = DataFrame(dict((c, other) for c in self.columns),
+                               **self._construct_axes_dict())
+                return self._align_frame(df, join=join, axis=axis, level=level,
+                                         copy=copy, fill_value=fill_value,
+                                         method=method, limit=limit,
+                                         fill_axis=fill_axis)
 
         if axis is not None:
             axis = self._get_axis_number(axis)
@@ -3502,11 +3541,11 @@ class NDFrame(PandasObject):
                     self.columns.join(other.columns, how=join, level=level,
                                       return_indexers=True)
 
-        left = self._reindex_with_indexers({0: [join_index,   ilidx],
+        left = self._reindex_with_indexers({0: [join_index, ilidx],
                                             1: [join_columns, clidx]},
                                            copy=copy, fill_value=fill_value,
                                            allow_dups=True)
-        right = other._reindex_with_indexers({0: [join_index,   iridx],
+        right = other._reindex_with_indexers({0: [join_index, iridx],
                                               1: [join_columns, cridx]},
                                              copy=copy, fill_value=fill_value,
                                              allow_dups=True)
@@ -3610,7 +3649,7 @@ class NDFrame(PandasObject):
               try_cast=False, raise_on_error=True):
 
         if isinstance(cond, NDFrame):
-            cond = cond.reindex(**self._construct_axes_dict())
+            cond, _ = cond.align(self, join='right', broadcast_axis=1)
         else:
             if not hasattr(cond, 'shape'):
                 raise ValueError('where requires an ndarray like object for '

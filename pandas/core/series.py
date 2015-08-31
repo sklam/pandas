@@ -1817,15 +1817,19 @@ class Series(base.IndexOpsMixin, generic.NDFrame):
                      ascending=ascending, pct=pct)
         return self._constructor(ranks, index=self.index).__finalize__(self)
 
-    def nlargest(self, n=5, take_last=False):
+    @deprecate_kwarg('take_last', 'keep', mapping={True: 'last', False: 'first'})
+    def nlargest(self, n=5, keep='first'):
         """Return the largest `n` elements.
 
         Parameters
         ----------
         n : int
             Return this many descending sorted values
-        take_last : bool
-            Where there are duplicate values, take the last duplicate
+        keep : {'first', 'last', False}, default 'first'
+            Where there are duplicate values:
+            - ``first`` : take the first occurrence.
+            - ``last`` : take the last occurrence.
+        take_last : deprecated
 
         Returns
         -------
@@ -1848,17 +1852,21 @@ class Series(base.IndexOpsMixin, generic.NDFrame):
         >>> s = pd.Series(np.random.randn(1e6))
         >>> s.nlargest(10)  # only sorts up to the N requested
         """
-        return select_n(self, n=n, take_last=take_last, method='nlargest')
+        return select_n(self, n=n, keep=keep, method='nlargest')
 
-    def nsmallest(self, n=5, take_last=False):
+    @deprecate_kwarg('take_last', 'keep', mapping={True: 'last', False: 'first'})
+    def nsmallest(self, n=5, keep='first'):
         """Return the smallest `n` elements.
 
         Parameters
         ----------
         n : int
             Return this many ascending sorted values
-        take_last : bool
-            Where there are duplicate values, take the last duplicate
+        keep : {'first', 'last', False}, default 'first'
+            Where there are duplicate values:
+            - ``first`` : take the first occurrence.
+            - ``last`` : take the last occurrence.
+        take_last : deprecated
 
         Returns
         -------
@@ -1881,7 +1889,7 @@ class Series(base.IndexOpsMixin, generic.NDFrame):
         >>> s = pd.Series(np.random.randn(1e6))
         >>> s.nsmallest(10)  # only sorts up to the N requested
         """
-        return select_n(self, n=n, take_last=take_last, method='nsmallest')
+        return select_n(self, n=n, keep=keep, method='nsmallest')
 
     def sortlevel(self, level=0, ascending=True, sort_remaining=True):
         """
@@ -2164,6 +2172,14 @@ class Series(base.IndexOpsMixin, generic.NDFrame):
         higher dims
         """
         return False
+
+    @Appender(generic._shared_docs['align'] % _shared_doc_kwargs)
+    def align(self, other, join='outer', axis=None, level=None, copy=True,
+              fill_value=None, method=None, limit=None, fill_axis=0,
+              broadcast_axis=None):
+        return super(Series, self).align(other, join=join, axis=axis, level=level, copy=copy,
+                                         fill_value=fill_value, method=method, limit=limit,
+                                         fill_axis=fill_axis, broadcast_axis=broadcast_axis)
 
     @Appender(generic._shared_docs['rename'] % _shared_doc_kwargs)
     def rename(self, index=None, **kwargs):

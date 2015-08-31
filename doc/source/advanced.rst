@@ -286,7 +286,7 @@ As usual, **both sides** of the slicers are included as this is label indexing.
                                          names=['lvl0', 'lvl1'])
    dfmi = pd.DataFrame(np.arange(len(miindex)*len(micolumns)).reshape((len(miindex),len(micolumns))),
                        index=miindex,
-                       columns=micolumns).sortlevel().sortlevel(axis=1)
+                       columns=micolumns).sort_index().sort_index(axis=1)
    dfmi
 
 Basic multi-index slicing using slices, lists, and labels.
@@ -458,7 +458,7 @@ correctly. You can think about breaking the axis into unique groups, where at
 the hierarchical level of interest, each distinct group shares a label, but no
 two have the same label. However, the ``MultiIndex`` does not enforce this:
 **you are responsible for ensuring that things are properly sorted**. There is
-an important new method ``sortlevel`` to sort an axis within a ``MultiIndex``
+an important new method ``sort_index`` to sort an axis within a ``MultiIndex``
 so that its labels are grouped and sorted by the original ordering of the
 associated factor at that level. Note that this does not necessarily mean the
 labels will be sorted lexicographically!
@@ -468,19 +468,19 @@ labels will be sorted lexicographically!
    import random; random.shuffle(tuples)
    s = pd.Series(np.random.randn(8), index=pd.MultiIndex.from_tuples(tuples))
    s
-   s.sortlevel(0)
-   s.sortlevel(1)
+   s.sort_index(level=0)
+   s.sort_index(level=1)
 
 .. _advanced.sortlevel_byname:
 
-Note, you may also pass a level name to ``sortlevel`` if the MultiIndex levels
+Note, you may also pass a level name to ``sort_index`` if the MultiIndex levels
 are named.
 
 .. ipython:: python
 
    s.index.set_names(['L1', 'L2'], inplace=True)
-   s.sortlevel(level='L1')
-   s.sortlevel(level='L2')
+   s.sort_index(level='L1')
+   s.sort_index(level='L2')
 
 Some indexing will work even if the data are not sorted, but will be rather
 inefficient and will also return a copy of the data rather than a view:
@@ -488,14 +488,14 @@ inefficient and will also return a copy of the data rather than a view:
 .. ipython:: python
 
    s['qux']
-   s.sortlevel(1)['qux']
+   s.sort_index(level=1)['qux']
 
 On higher dimensional objects, you can sort any of the other axes by level if
 they have a MultiIndex:
 
 .. ipython:: python
 
-   df.T.sortlevel(1, axis=1)
+   df.T.sort_index(level=1, axis=1)
 
 The ``MultiIndex`` object has code to **explicity check the sort depth**. Thus,
 if you try to index at a depth at which the index is not sorted, it will raise
@@ -661,14 +661,18 @@ values NOT in the categories, similarly to how you can reindex ANY pandas index.
    Reshaping and Comparision operations on a ``CategoricalIndex`` must have the same categories
    or a ``TypeError`` will be raised.
 
-   .. ipython:: python
-      :okexcept:
+   .. code-block:: python
 
-      df3 = pd.DataFrame({'A' : np.arange(6),
-                          'B' : pd.Series(list('aabbca')).astype('category')})
-      df3 = df3.set_index('B')
-      df3.index
-      pd.concat([df2, df3]
+      In [9]: df3 = pd.DataFrame({'A' : np.arange(6),
+                                  'B' : pd.Series(list('aabbca')).astype('category')})
+
+      In [11]: df3 = df3.set_index('B')
+
+      In [11]: df3.index
+      Out[11]: CategoricalIndex([u'a', u'a', u'b', u'b', u'c', u'a'], categories=[u'a', u'b', u'c'], ordered=False, name=u'B', dtype='category')
+
+      In [12]: pd.concat([df2, df3]
+      TypeError: categories must match existing categories when appending
 
 .. _indexing.float64index:
 
@@ -734,18 +738,20 @@ In float indexes, slicing using floats is allowed
 
 In non-float indexes, slicing using floats will raise a ``TypeError``
 
-.. ipython:: python
-   :okexcept:
+.. code-block:: python
 
-   pd.Series(range(5))[3.5]
-   pd.Series(range(5))[3.5:4.5]
+   In [1]: pd.Series(range(5))[3.5]
+   TypeError: the label [3.5] is not a proper indexer for this index type (Int64Index)
+
+   In [1]: pd.Series(range(5))[3.5:4.5]
+   TypeError: the slice start [3.5] is not a proper indexer for this index type (Int64Index)
 
 Using a scalar float indexer will be deprecated in a future version, but is allowed for now.
 
-.. ipython:: python
-   :okwarning:
+.. code-block:: python
 
-   pd.Series(range(5))[3.0]
+   In [3]: pd.Series(range(5))[3.0]
+   Out[3]: 3
 
 Here is a typical use-case for using this type of indexing. Imagine that you have a somewhat
 irregular timedelta-like indexing scheme, but the data is recorded as floats. This could for

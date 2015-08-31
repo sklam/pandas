@@ -328,7 +328,7 @@ equality to be True:
    df1 = pd.DataFrame({'col':['foo', 0, np.nan]})
    df2 = pd.DataFrame({'col':[np.nan, 0, 'foo']}, index=[2,1,0])
    df1.equals(df2)
-   df1.equals(df2.sort())
+   df1.equals(df2.sort_index())
 
 Comparing array-like objects
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -352,11 +352,13 @@ objects of the same length:
 Trying to compare ``Index`` or ``Series`` objects of different lengths will
 raise a ValueError:
 
-.. ipython:: python
-    :okexcept:
+.. code-block:: python
 
-    pd.Series(['foo', 'bar', 'baz']) == pd.Series(['foo', 'bar'])
-    pd.Series(['foo', 'bar', 'baz']) == pd.Series(['foo'])
+    In [55]: pd.Series(['foo', 'bar', 'baz']) == pd.Series(['foo', 'bar'])
+    ValueError: Series lengths must match to compare
+
+    In [56]: pd.Series(['foo', 'bar', 'baz']) == pd.Series(['foo'])
+    ValueError: Series lengths must match to compare
 
 Note that this is different from the numpy behavior where a comparison can
 be broadcast:
@@ -1487,7 +1489,7 @@ The ``by`` argument can take a list of column names, e.g.:
 
 .. ipython:: python
 
-   df1[['one', 'two', 'three']].sort_index(by=['one','two'])
+   df1[['one', 'two', 'three']].sort_values(by=['one','two'])
 
 These methods have special treatment of NA values via the ``na_position``
 argument:
@@ -1495,8 +1497,8 @@ argument:
 .. ipython:: python
 
    s[2] = np.nan
-   s.order()
-   s.order(na_position='first')
+   s.sort_values()
+   s.sort_values(na_position='first')
 
 
 .. _basics.searchsorted:
@@ -1562,7 +1564,7 @@ all levels to ``by``.
 .. ipython:: python
 
    df1.columns = pd.MultiIndex.from_tuples([('a','one'),('a','two'),('b','three')])
-   df1.sort_index(by=('a','two'))
+   df1.sort_values(by=('a','two'))
 
 
 Copying

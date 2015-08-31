@@ -5177,6 +5177,20 @@ class TestDataFrame(tm.TestCase, CheckIndexing,
         self.assertNotIn('foo', self.frame)
         # TODO self.assertEqual(self.frame.columns.name, 'baz')
 
+        # 10912
+        # inplace ops cause caching issue
+        a = DataFrame([[1,2,3],[4,5,6]], columns=['A','B','C'], index=['X','Y'])
+        b = a.pop('B')
+        b += 1
+
+        # original frame
+        expected = DataFrame([[1,3],[4,6]], columns=['A','C'], index=['X','Y'])
+        assert_frame_equal(a, expected)
+
+        # result
+        expected = Series([2,5],index=['X','Y'],name='B')+1
+        assert_series_equal(b, expected)
+
     def test_pop_non_unique_cols(self):
         df = DataFrame({0: [0, 1], 1: [0, 1], 2: [4, 5]})
         df.columns = ["a", "b", "a"]
@@ -7975,6 +7989,22 @@ class TestDataFrame(tm.TestCase, CheckIndexing,
             expected = df2.drop_duplicates(['AAA', 'B'], take_last=True)
         assert_frame_equal(result, expected)
 
+        # integers
+        result = df.drop_duplicates('C')
+        expected = df.iloc[[0,2]]
+        assert_frame_equal(result, expected)
+        result = df.drop_duplicates('C',keep='last')
+        expected = df.iloc[[-2,-1]]
+        assert_frame_equal(result, expected)
+
+        df['E'] = df['C'].astype('int8')
+        result = df.drop_duplicates('E')
+        expected = df.iloc[[0,2]]
+        assert_frame_equal(result, expected)
+        result = df.drop_duplicates('E',keep='last')
+        expected = df.iloc[[-2,-1]]
+        assert_frame_equal(result, expected)
+
     def test_drop_duplicates_for_take_all(self):
         df = DataFrame({'AAA': ['foo', 'bar', 'baz', 'bar',
                                 'foo', 'bar', 'qux', 'foo'],
@@ -10066,6 +10096,34 @@ class TestDataFrame(tm.TestCase, CheckIndexing,
         self.assertRaises(ValueError, self.frame.align, af.ix[0, :3],
                           join='inner', axis=2)
 
+        # align dataframe to series with broadcast or not
+        idx = self.frame.index
+        s = Series(range(len(idx)), index=idx)
+
+        left, right = self.frame.align(s, axis=0)
+        tm.assert_index_equal(left.index, self.frame.index)
+        tm.assert_index_equal(right.index, self.frame.index)
+        self.assertTrue(isinstance(right, Series))
+
+        left, right = self.frame.align(s, broadcast_axis=1)
+        tm.assert_index_equal(left.index, self.frame.index)
+        expected = {}
+        for c in self.frame.columns:
+            expected[c] = s
+        expected = DataFrame(expected, index=self.frame.index,
+                             columns=self.frame.columns)
+        assert_frame_equal(right, expected)
+
+        # GH 9558
+        df = DataFrame({'a':[1,2,3], 'b':[4,5,6]})
+        result = df[df['a'] == 2]
+        expected = DataFrame([[2, 5]], index=[1], columns=['a', 'b'])
+        assert_frame_equal(result, expected)
+
+        result = df.where(df['a'] == 2, 0)
+        expected = DataFrame({'a':[0, 2, 0], 'b':[0, 5, 0]})
+        assert_frame_equal(result, expected)
+
     def _check_align(self, a, b, axis, fill_axis, how, method, limit=None):
         aa, ab = a.align(b, axis=axis, join=how, method=method, limit=limit,
                          fill_axis=fill_axis)
@@ -10310,6 +10368,13 @@ class TestDataFrame(tm.TestCase, CheckIndexing,
             # aligining
             cond = (df >= 0)[1:]
             _check_set(df, cond)
+
+        # GH 10218
+        # test DataFrame.where with Series slicing
+        df = DataFrame({'a': range(3), 'b': range(4, 7)})
+        result = df.where(df['a'] == 1)
+        expected = df[df['a'] == 1].reindex(df.index)
+        assert_frame_equal(result, expected)
 
     def test_where_bug(self):
 
@@ -11219,6 +11284,25 @@ class TestDataFrame(tm.TestCase, CheckIndexing,
         s.columns = ['col1','col2']
         res = s.apply(lambda x: Series({'min': min(x), 'max': max(x)}), 1)
         tm.assertIsInstance(res.index, MultiIndex)
+
+    def test_apply_dict(self):
+
+        # GH 8735
+        A = DataFrame([['foo', 'bar'], ['spam', 'eggs']])
+        A_dicts = pd.Series([dict([(0, 'foo'), (1, 'spam')]),
+                             dict([(0, 'bar'), (1, 'eggs')])])
+        B = DataFrame([[0, 1], [2, 3]])
+        B_dicts = pd.Series([dict([(0, 0), (1, 2)]), dict([(0, 1), (1, 3)])])
+        fn = lambda x: x.to_dict()
+
+        for df, dicts in [(A, A_dicts), (B, B_dicts)]:
+            reduce_true = df.apply(fn, reduce=True)
+            reduce_false = df.apply(fn, reduce=False)
+            reduce_none = df.apply(fn, reduce=None)
+
+            assert_series_equal(reduce_true, dicts)
+            assert_frame_equal(reduce_false, df)
+            assert_series_equal(reduce_none, dicts)
 
     def test_applymap(self):
         applied = self.frame.applymap(lambda x: x * 2)

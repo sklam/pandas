@@ -801,8 +801,7 @@ class DataFrame(NDFrame):
         into a default chunk size of 10,000. Failures return the complete error
         response which can be quite long depending on the size of the insert.
         There are several important limitations of the Google streaming API
-        which are detailed at:
-        https://developers.google.com/bigquery/streaming-data-into-bigquery.
+        which are `here <https://developers.google.com/bigquery/streaming-data-into-bigquery>`__
 
         Parameters
         ----------
@@ -1477,7 +1476,8 @@ class DataFrame(NDFrame):
     def to_latex(self, buf=None, columns=None, col_space=None, colSpace=None,
                  header=True, index=True, na_rep='NaN', formatters=None,
                  float_format=None, sparsify=None, index_names=True,
-                 bold_rows=True, longtable=False, escape=True):
+                 bold_rows=True, column_format=None,
+                 longtable=False, escape=True):
         """
         Render a DataFrame to a tabular environment table. You can splice
         this into a LaTeX document. Requires \\usepackage{booktabs}.
@@ -1486,6 +1486,9 @@ class DataFrame(NDFrame):
 
         bold_rows : boolean, default True
             Make the row labels bold in the output
+        column_format : str, default None
+            The columns format as specified in `LaTeX table format
+            <https://en.wikibooks.org/wiki/LaTeX/Tables>`__ e.g 'rcl' for 3 columns
         longtable : boolean, default False
             Use a longtable environment instead of tabular. Requires adding
             a \\usepackage{longtable} to your LaTeX preamble.
@@ -1509,7 +1512,7 @@ class DataFrame(NDFrame):
                                            sparsify=sparsify,
                                            index_names=index_names,
                                            escape=escape)
-        formatter.to_latex(longtable=longtable)
+        formatter.to_latex(column_format=column_format, longtable=longtable)
 
         if buf is None:
             return formatter.buf.getvalue()
@@ -2591,6 +2594,14 @@ class DataFrame(NDFrame):
                                                copy=copy,
                                                fill_value=fill_value)
 
+    @Appender(_shared_docs['align'] % _shared_doc_kwargs)
+    def align(self, other, join='outer', axis=None, level=None, copy=True,
+              fill_value=None, method=None, limit=None, fill_axis=0,
+              broadcast_axis=None):
+        return super(DataFrame, self).align(other, join=join, axis=axis, level=level, copy=copy,
+                                            fill_value=fill_value, method=method, limit=limit,
+                                            fill_axis=fill_axis, broadcast_axis=broadcast_axis)
+
     @Appender(_shared_docs['reindex'] % _shared_doc_kwargs)
     def reindex(self, index=None, columns=None, **kwargs):
         return super(DataFrame, self).reindex(index=index, columns=columns,
@@ -2954,7 +2965,13 @@ class DataFrame(NDFrame):
         from pandas.hashtable import duplicated_int64, _SIZE_HINT_LIMIT
 
         def f(vals):
-            labels, shape = factorize(vals, size_hint=min(len(self), _SIZE_HINT_LIMIT))
+
+            # if we have integers we can directly index with these
+            if com.is_integer_dtype(vals):
+                from pandas.core.nanops import unique1d
+                labels, shape = vals, unique1d(vals)
+            else:
+                labels, shape = factorize(vals, size_hint=min(len(self), _SIZE_HINT_LIMIT))
             return labels.astype('i8',copy=False), len(shape)
 
         if subset is None:
@@ -3155,16 +3172,16 @@ class DataFrame(NDFrame):
                                inplace=inplace, sort_remaining=sort_remaining)
 
 
-    def _nsorted(self, columns, n, method, take_last):
+    def _nsorted(self, columns, n, method, keep):
         if not com.is_list_like(columns):
             columns = [columns]
         columns = list(columns)
-        ser = getattr(self[columns[0]], method)(n, take_last=take_last)
+        ser = getattr(self[columns[0]], method)(n, keep=keep)
         ascending = dict(nlargest=False, nsmallest=True)[method]
         return self.loc[ser.index].sort_values(columns, ascending=ascending,
                                                kind='mergesort')
 
-    def nlargest(self, n, columns, take_last=False):
+    def nlargest(self, n, columns, keep='first'):
         """Get the rows of a DataFrame sorted by the `n` largest
         values of `columns`.
 
@@ -3176,8 +3193,10 @@ class DataFrame(NDFrame):
             Number of items to retrieve
         columns : list or str
             Column name or names to order by
-        take_last : bool, optional
-            Where there are duplicate values, take the last duplicate
+        keep : {'first', 'last', False}, default 'first'
+            Where there are duplicate values:
+            - ``first`` : take the first occurrence.
+            - ``last`` : take the last occurrence.
 
         Returns
         -------
@@ -3194,9 +3213,9 @@ class DataFrame(NDFrame):
         1  10  b   2
         2   8  d NaN
         """
-        return self._nsorted(columns, n, 'nlargest', take_last)
+        return self._nsorted(columns, n, 'nlargest', keep)
 
-    def nsmallest(self, n, columns, take_last=False):
+    def nsmallest(self, n, columns, keep='first'):
         """Get the rows of a DataFrame sorted by the `n` smallest
         values of `columns`.
 
@@ -3208,8 +3227,10 @@ class DataFrame(NDFrame):
             Number of items to retrieve
         columns : list or str
             Column name or names to order by
-        take_last : bool, optional
-            Where there are duplicate values, take the last duplicate
+        keep : {'first', 'last', False}, default 'first'
+            Where there are duplicate values:
+            - ``first`` : take the first occurrence.
+            - ``last`` : take the last occurrence.
 
         Returns
         -------
@@ -3226,7 +3247,7 @@ class DataFrame(NDFrame):
         0  1  a   1
         2  8  d NaN
         """
-        return self._nsorted(columns, n, 'nsmallest', take_last)
+        return self._nsorted(columns, n, 'nsmallest', keep)
 
     def swaplevel(self, i, j, axis=0):
         """
@@ -3913,13 +3934,15 @@ class DataFrame(NDFrame):
         # e.g. if we want to apply to a SparseFrame, then can't directly reduce
         if reduce:
 
+            values = self.values
+
+            # Create a dummy Series from an empty array
+            index = self._get_axis(axis)
+            empty_arr = np.empty(len(index), dtype=values.dtype)
+            dummy = Series(empty_arr, index=self._get_axis(axis),
+                           dtype=values.dtype)
+
             try:
-
-                # the is the fast-path
-                values = self.values
-                dummy = Series(NA, index=self._get_axis(axis),
-                               dtype=values.dtype)
-
                 labels = self._get_agg_axis(axis)
                 result = lib.reduce(values, func, axis=axis, dummy=dummy,
                                     labels=labels)

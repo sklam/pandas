@@ -546,7 +546,7 @@ class BaseExprVisitor(ast.NodeVisitor):
                 args += self.visit(node.starargs)
 
             if node.keywords or node.kwargs:
-                raise TypeError("Function {0} does not support keyword "
+                raise TypeError("Function \"{0}\" does not support keyword "
                                 "arguments".format(res.name))
 
             return res(*args, **kwargs)

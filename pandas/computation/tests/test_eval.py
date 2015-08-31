@@ -1521,10 +1521,21 @@ class TestMathPythonPython(tm.TestCase):
 
     def test_undefined_func(self):
         df = DataFrame({'a': np.random.randn(10)})
-        with tm.assertRaises(ValueError):
+        with tm.assertRaisesRegexp(ValueError,
+                                   "\"mysin\" is not a supported function"):
             df.eval("mysin(a)",
                     engine=self.engine,
                     parser=self.parser)
+
+    def test_keyword_arg(self):
+        df = DataFrame({'a': np.random.randn(10)})
+        with tm.assertRaisesRegexp(TypeError,
+                                   "Function \"sin\" does not support "
+                                   "keyword arguments"):
+            df.eval("sin(x=a)",
+                    engine=self.engine,
+                    parser=self.parser)
+
 
 class TestMathPythonPandas(TestMathPythonPython):
     @classmethod

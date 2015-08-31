@@ -1464,7 +1464,7 @@ class TestMathPythonPython(tm.TestCase):
         for fn in self.unary_fns:
             expr = "{0}(a)".format(fn)
             got = self.eval(expr)
-            expect = getattr(np, fn)(a.data)
+            expect = getattr(np, fn)(a)
             pd.util.testing.assert_almost_equal(got, expect)
 
     def test_binary_functions(self):
@@ -1475,7 +1475,7 @@ class TestMathPythonPython(tm.TestCase):
         for fn in self.binary_fns:
             expr = "{0}(a, b)".format(fn)
             got = self.eval(expr)
-            expect = getattr(np, fn)(a.data, b.data)
+            expect = getattr(np, fn)(a, b)
             np.testing.assert_allclose(got, expect)
 
     def test_df_use_case(self):
@@ -1483,8 +1483,35 @@ class TestMathPythonPython(tm.TestCase):
                         'b': np.random.randn(10)})
         df.eval("e = arctan2(sin(a), b)")
         got = df.e
-        expect = np.arctan2(np.sin(df.a.data), df.b.data)
+        expect = np.arctan2(np.sin(df.a), df.b)
         pd.util.testing.assert_almost_equal(got, expect)
+
+    def test_df_arithmetic_subexpression(self):
+        df = DataFrame({'a': np.random.randn(10),
+                        'b': np.random.randn(10)})
+        df.eval("e = sin(a + b)")
+        got = df.e
+        expect = np.sin(df.a + df.b)
+        pd.util.testing.assert_almost_equal(got, expect)
+
+    def check_result_type(self, dtype, expect_dtype):
+        df = DataFrame({'a': np.random.randn(10).astype(dtype)})
+        self.assertEqual(df.a.dtype, dtype)
+        df.eval("b = sin(a)")
+        got = df.b
+        expect = np.sin(df.a)
+        self.assertEqual(expect.dtype, got.dtype)
+        self.assertEqual(expect_dtype, got.dtype)
+        pd.util.testing.assert_almost_equal(got, expect)
+
+    def test_result_types(self):
+        self.check_result_type(np.int32, np.float64)
+        self.check_result_type(np.int64, np.float64)
+        self.check_result_type(np.float32, np.float32)
+        self.check_result_type(np.float64, np.float64)
+        # Did not test complex64 because DataFrame is converting it to
+        # complex128
+        self.check_result_type(np.complex128, np.complex128)
 
 
 class TestMathPythonPandas(TestMathPythonPython):

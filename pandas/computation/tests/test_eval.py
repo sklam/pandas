@@ -1443,6 +1443,8 @@ class TestOperationsPythonPandas(TestOperationsNumExprPandas):
 class TestMathPythonPython(tm.TestCase):
     @classmethod
     def setUpClass(cls):
+        super(TestMathPythonPython, cls).setUpClass()
+        tm.skip_if_no_ne()
         cls.engine = 'python'
         cls.parser = 'pandas'
         cls.unary_fns = _unary_math_ops
